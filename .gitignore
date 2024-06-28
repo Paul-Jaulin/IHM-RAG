@@ -2,3 +2,5 @@
 .git/*
 .venv/*
 .env.local
+pkg/advanced_chatbot.egg-info
+.python-version
