@@ -10,28 +10,41 @@ openai.api_key = openai_api_key
 # Function to handle file upload and display document list with a progress bar
 def handle_file_upload():
     uploaded_files = st.file_uploader("Upload documents", accept_multiple_files=True)
-    if uploaded_files and not st.session_state.get("uploaded"):
-        st.session_state.uploaded = True
+    if uploaded_files:
+        if "uploaded_files" not in st.session_state:
+            st.session_state.uploaded_files = []
+
+        st.session_state.uploaded_files = uploaded_files
+
+        if "documents" not in st.session_state:
+            st.session_state.documents = []
+        if "summaries" not in st.session_state:
+            st.session_state.summaries = []
+        if "uploaded" not in st.session_state:
+            st.session_state.uploaded = []
+
         progress_window = st.empty()
         progress_bar = st.progress(0)
         
         num_files = len(uploaded_files)
         for i, uploaded_file in enumerate(uploaded_files):
-            st.session_state.documents.append({
-                "name": uploaded_file.name,
-                "file": uploaded_file,
-                "use_in_rag": True
-            })
-            progress_window.text(f"Uploading {uploaded_file.name}...")
-            progress_bar.progress((i + 1) / num_files)
-            time.sleep(1)  # Simulate upload time
+            if uploaded_file.name not in st.session_state.uploaded:
+                st.session_state.documents.append({
+                    "name": uploaded_file.name,
+                    "file": uploaded_file,
+                    "use_in_rag": True
+                })
+                st.session_state.uploaded.append(uploaded_file.name)
+                progress_window.text(f"Uploading {uploaded_file.name}...")
+                progress_bar.progress((i + 1) / num_files)
+                time.sleep(1)  # Simulate upload time
 
-            # Generate and display summary for each document
-            summary = generate_summary(uploaded_file)
-            st.session_state.summaries.append({
-                "name": uploaded_file.name,
-                "summary": summary
-            })
+                # Generate and display summary for each document
+                summary = generate_summary(uploaded_file)
+                st.session_state.summaries.append({
+                    "name": uploaded_file.name,
+                    "summary": summary
+                })
 
         progress_window.empty()
         progress_bar.empty()
@@ -42,14 +55,16 @@ def generate_summary(file):
     return f"Summary of {file.name}"
 
 # Initialize session state variables
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = []
 if "documents" not in st.session_state:
     st.session_state.documents = []
 if "summaries" not in st.session_state:
     st.session_state.summaries = []
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
 if "uploaded" not in st.session_state:
-    st.session_state.uploaded = False
+    st.session_state.uploaded = []
 
 # Sidebar - Document list and upload button
 st.sidebar.title("AI Assistant")
@@ -66,6 +81,12 @@ if st.session_state.documents:
         doc["use_in_rag"] = use_in_rag
 else:
     st.sidebar.write("No documents uploaded.")
+
+# Display document summaries
+if st.session_state.summaries:
+    st.sidebar.header("Document Summaries:")
+    for summary in st.session_state.summaries:
+        st.sidebar.write(f"**{summary['name']}**: {summary['summary']}")
 
 # Sidebar - Past conversation history (for illustration, this section is static in this example)
 st.sidebar.header("Conversation History")
