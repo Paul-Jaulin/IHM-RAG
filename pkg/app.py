@@ -2,9 +2,8 @@ import streamlit as st
 import uuid
 import os
 from streamlit_chat import message
-import openai
 from dotenv import load_dotenv
-from controller import handle_file_upload, generate_summary, load_history, save_history, add_message, list_data_files, get_file_paths
+from controller import handle_file_upload, load_history, save_history, add_message, list_data_files, get_file_paths, get_bot_response
 
 # Load environment variables from .env.local
 load_dotenv(dotenv_path=".env.local")
@@ -43,14 +42,18 @@ st.markdown("""
         padding: 10px;
         margin-bottom: 10px;
         border-radius: 10px;
+        color: #333; /* Text color */
+        font-size: 16px; /* Font size */
     }
     .chat-bubble.user {
         background-color: #dcf8c6;
         text-align: right;
+        color: #000; /* Ensure good contrast for user messages */
     }
     .chat-bubble.bot {
         background-color: #fff;
         text-align: left;
+        color: #000; /* Ensure good contrast for bot messages */
     }
     .chat-header {
         text-align: center;
@@ -82,6 +85,13 @@ if "system_prompt" not in st.session_state:
 if "selected_files" not in st.session_state:
     st.session_state.selected_files = []
 
+# Ensure there is a current conversation
+if st.session_state.current_conversation is None:
+    new_conversation_id = str(uuid.uuid4())
+    st.session_state.chat_history[new_conversation_id] = []
+    st.session_state.current_conversation = new_conversation_id
+    save_history(st.session_state.chat_history)
+
 # Sidebar Layout
 st.sidebar.title("AI Assistant")
 
@@ -96,13 +106,13 @@ if st.sidebar.button("Create New Conversation", key="create_new_conv", help="Cli
     st.session_state.chat_history[new_conversation_id] = []
     st.session_state.current_conversation = new_conversation_id
     save_history(st.session_state.chat_history)
-    st.experimental_rerun()
+    st.rerun()
 
 if isinstance(st.session_state.chat_history, dict):
     for conv_id in st.session_state.chat_history.keys():
         if st.sidebar.button(f"Load Conversation {conv_id}"):
             st.session_state.current_conversation = conv_id
-            st.experimental_rerun()
+            st.rerun()
 
 # Documents at the bottom
 st.sidebar.header("Your documents:")
@@ -116,8 +126,8 @@ if st.session_state.documents:
             st.session_state[checkbox_key] = doc["use_in_rag"]
         use_in_rag = st.sidebar.checkbox(doc["name"], value=st.session_state[checkbox_key], key=checkbox_key)
         doc["use_in_rag"] = use_in_rag
-        if use_in_rag:
-            st.session_state.selected_files.append(doc["name"])
+        if use_in_rag and doc["path"] not in st.session_state.selected_files:
+            st.session_state.selected_files.append(doc["path"])
 else:
     st.sidebar.write("No documents uploaded.")
 
@@ -130,14 +140,25 @@ if data_files:
         if file_checkbox_key not in st.session_state:
             st.session_state[file_checkbox_key] = False
         use_in_rag = st.sidebar.checkbox(file.name, value=st.session_state[file_checkbox_key], key=file_checkbox_key)
-        if use_in_rag and file.name not in st.session_state.selected_files:
-            st.session_state.selected_files.append(file.name)
+        if use_in_rag and str(file) not in st.session_state.selected_files:
+            st.session_state.selected_files.append(str(file))
 else:
     st.sidebar.write("No files found in data directory.")
 
 # Main section - Chat display
 st.markdown("<h2 class='chat-header'>Welcome to the AI Assistant</h2>", unsafe_allow_html=True)
 st.markdown("<p class='chat-header'>You can upload documents or ask me something...</p>", unsafe_allow_html=True)
+
+def add_user_message():
+    user_input = st.session_state.user_input
+    if user_input:
+        add_message("user", user_input)
+        
+        # Get bot response using selected files and system prompt
+        bot_response = get_bot_response(user_input, st.session_state.selected_files, st.session_state.system_prompt)
+        
+        add_message("bot", bot_response)
+        st.session_state.user_input = ""
 
 if st.session_state.current_conversation is not None:
     for chat in st.session_state.chat_history[st.session_state.current_conversation]:
@@ -163,7 +184,7 @@ if st.session_state.current_conversation is not None:
             add_message("bot", bot_response)
             st.session_state.user_input = ""
 
-    st.text_input("Type your request...", key="user_input", on_change=add_user_message, placeholder="Type your request here...")
+    st.text_input("Type your request...", key="user_input", on_change=add_user_message, placeholder="Type your request here...", class_="chat-input")
 else:
     st.write("Please create or load a conversation to start chatting.")
 
