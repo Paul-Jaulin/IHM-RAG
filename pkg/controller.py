@@ -4,8 +4,10 @@ import os
 import time
 from typing import List, Dict
 import streamlit as st
+from pathlib import Path  # Import Path here
 from advanced_chatbot.services.rag_service import RagService
 from advanced_chatbot.config import DATA_PATH
+from llama_index_client import ChatMessage
 
 def handle_file_upload() -> List[Dict]:
     """
@@ -36,13 +38,6 @@ def handle_file_upload() -> List[Dict]:
         progress_window.empty()
         progress_bar.empty()
     return documents
-
-def generate_summary(file_path: str) -> str:
-    """
-    Generate summary for a given document using RAG service.
-    """
-    summary = RagService.summarize_document_index(file_path)
-    return summary
 
 def load_history(file_path='chat_history.json') -> Dict:
     """
@@ -89,3 +84,34 @@ def get_file_paths(selected_files: List[str]) -> List[str]:
         if file_path.exists():
             file_paths.append(str(file_path))
     return file_paths
+
+def create_index_for_files(files: List[str]) -> List[str]:
+    """
+    Create indexes for the selected files.
+    """
+    index_ids = []
+    for file in files:
+        index_id, _ = RagService.create_vector_store_index(Path(file))
+        index_ids.append(index_id)
+    return index_ids
+
+def get_bot_response(user_input: str, selected_files: List[str], system_prompt: str) -> str:
+    """
+    Get bot response using RAG service.
+    """
+    if not selected_files:
+        return "No documents selected for retrieval."
+
+    index_ids = create_index_for_files(selected_files)
+    if not index_ids:
+        return "Failed to create indexes for the selected documents."
+
+    conversation_history = [ChatMessage(role="user", content=user_input)]
+    response_gen, _ = RagService.complete_chat(
+        query=user_input,
+        conversation_history=conversation_history,
+        index_ids=index_ids,
+        system_prompt=system_prompt
+    )
+    response = "".join(list(response_gen))
+    return response
