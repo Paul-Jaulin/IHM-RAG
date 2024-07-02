@@ -1,14 +1,13 @@
 import streamlit as st
-import time
-import json
 import uuid
 import os
 from streamlit_chat import message
 import openai
+from dotenv import load_dotenv
+from controller import handle_file_upload, generate_summary, load_history, save_history, add_message, list_data_files, get_file_paths
 
-# Initialize OpenAI API (replace 'your_openai_api_key_here' with your actual API key)
-openai_api_key = "your_openai_api_key_here"
-openai.api_key = openai_api_key
+# Load environment variables from .env.local
+load_dotenv(dotenv_path=".env.local")
 
 # Custom CSS to style the app
 st.markdown("""
@@ -65,53 +64,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Function to handle file upload and display document list with a progress bar
-def handle_file_upload():
-    uploaded_files = st.sidebar.file_uploader("Upload documents", accept_multiple_files=True)
-    if uploaded_files and not st.session_state.get("uploaded"):
-        st.session_state.uploaded = True
-        progress_window = st.empty()
-        progress_bar = st.sidebar.progress(0)
-
-        num_files = len(uploaded_files)
-        for i, uploaded_file in enumerate(uploaded_files):
-            st.session_state.documents.append({
-                "id": str(uuid.uuid4()),  # Generate unique ID for each document
-                "name": uploaded_file.name,
-                "file": uploaded_file,
-                "use_in_rag": True
-            })
-            progress_window.text(f"Uploading {uploaded_file.name}...")
-            progress_bar.progress((i + 1) / num_files)
-            time.sleep(1)  # Simulate upload time
-
-            # Generate and display summary for each document
-            summary = generate_summary(uploaded_file)
-            st.session_state.summaries.append({
-                "name": uploaded_file.name,
-                "summary": summary
-            })
-
-        progress_window.empty()
-        progress_bar.empty()
-
-# Function to generate summary using OpenAI API
-def generate_summary(file):
-    # For illustration, using a dummy summary. Replace this with actual OpenAI API call
-    return f"Summary of {file.name}"
-
-# Function to load conversation history from JSON file
-def load_history(file_path='chat_history.json'):
-    if os.path.exists(file_path):
-        with open(file_path, 'r') as file:
-            return json.load(file)
-    return {}
-
-# Function to save conversation history to JSON file
-def save_history(history, file_path='chat_history.json'):
-    with open(file_path, 'w') as file:
-        json.dump(history, file)
-
 # Initialize session state variables
 if "documents" not in st.session_state:
     st.session_state.documents = []
@@ -127,17 +79,8 @@ if "current_conversation" not in st.session_state:
     st.session_state.current_conversation = None
 if "system_prompt" not in st.session_state:
     st.session_state.system_prompt = "You are a helpful assistant."
-
-# Function to add message to session state and update JSON file
-def add_message(role, content):
-    message = {
-        "id": str(uuid.uuid4()),  # Generate unique ID
-        "role": role,
-        "content": content
-    }
-    if st.session_state.current_conversation is not None:
-        st.session_state.chat_history[st.session_state.current_conversation].append(message)
-        save_history(st.session_state.chat_history)
+if "selected_files" not in st.session_state:
+    st.session_state.selected_files = []
 
 # Sidebar Layout
 st.sidebar.title("AI Assistant")
@@ -163,7 +106,7 @@ if isinstance(st.session_state.chat_history, dict):
 
 # Documents at the bottom
 st.sidebar.header("Your documents:")
-handle_file_upload()
+st.session_state.documents = handle_file_upload()
 
 if st.session_state.documents:
     st.sidebar.subheader("Select documents to use in RAG:")
@@ -173,8 +116,24 @@ if st.session_state.documents:
             st.session_state[checkbox_key] = doc["use_in_rag"]
         use_in_rag = st.sidebar.checkbox(doc["name"], value=st.session_state[checkbox_key], key=checkbox_key)
         doc["use_in_rag"] = use_in_rag
+        if use_in_rag:
+            st.session_state.selected_files.append(doc["name"])
 else:
     st.sidebar.write("No documents uploaded.")
+
+# List files in data directory and allow selection
+st.sidebar.header("Files in Data Directory")
+data_files = list_data_files()
+if data_files:
+    for file in data_files:
+        file_checkbox_key = f"file_checkbox_{file.name}"
+        if file_checkbox_key not in st.session_state:
+            st.session_state[file_checkbox_key] = False
+        use_in_rag = st.sidebar.checkbox(file.name, value=st.session_state[file_checkbox_key], key=file_checkbox_key)
+        if use_in_rag and file.name not in st.session_state.selected_files:
+            st.session_state.selected_files.append(file.name)
+else:
+    st.sidebar.write("No files found in data directory.")
 
 # Main section - Chat display
 st.markdown("<h2 class='chat-header'>Welcome to the AI Assistant</h2>", unsafe_allow_html=True)
@@ -192,6 +151,8 @@ if st.session_state.current_conversation is not None:
         if user_input:
             add_message("user", user_input)
             
+            # Get file paths from selected files
+            selected_file_paths = get_file_paths(st.session_state.selected_files)
             # Use the system prompt for generating the bot response
             bot_response = openai.Completion.create(
                 engine="text-davinci-003",
