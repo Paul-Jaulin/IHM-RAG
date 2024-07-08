@@ -1,7 +1,6 @@
 import streamlit as st
 import uuid
-import os
-from streamlit_chat import message
+import os  # Import os module
 from dotenv import load_dotenv
 from controller import handle_file_upload, load_history, save_history, add_message, list_data_files, get_file_paths, get_bot_response
 
@@ -136,12 +135,12 @@ st.sidebar.header("Files in Data Directory")
 data_files = list_data_files()
 if data_files:
     for file in data_files:
-        file_checkbox_key = f"file_checkbox_{file.name}"
+        file_checkbox_key = f"file_checkbox_{os.path.basename(file)}"
         if file_checkbox_key not in st.session_state:
             st.session_state[file_checkbox_key] = False
-        use_in_rag = st.sidebar.checkbox(file.name, value=st.session_state[file_checkbox_key], key=file_checkbox_key)
-        if use_in_rag and str(file) not in st.session_state.selected_files:
-            st.session_state.selected_files.append(str(file))
+        use_in_rag = st.sidebar.checkbox(os.path.basename(file), value=st.session_state[file_checkbox_key], key=file_checkbox_key)
+        if use_in_rag and file not in st.session_state.selected_files:
+            st.session_state.selected_files.append(file)
 else:
     st.sidebar.write("No files found in data directory.")
 
@@ -167,24 +166,7 @@ if st.session_state.current_conversation is not None:
         else:
             st.markdown(f"<div class='chat-bubble bot'>{chat['content']}</div>", unsafe_allow_html=True)
 
-    def add_user_message():
-        user_input = st.session_state.user_input
-        if user_input:
-            add_message("user", user_input)
-            
-            # Get file paths from selected files
-            selected_file_paths = get_file_paths(st.session_state.selected_files)
-            # Use the system prompt for generating the bot response
-            bot_response = openai.Completion.create(
-                engine="text-davinci-003",
-                prompt=st.session_state.system_prompt + "\nUser: " + user_input + "\nAssistant:",
-                max_tokens=150
-            ).choices[0].text.strip()
-            
-            add_message("bot", bot_response)
-            st.session_state.user_input = ""
-
-    st.text_input("Type your request...", key="user_input", on_change=add_user_message, placeholder="Type your request here...", class_="chat-input")
+    st.text_input("Type your request...", key="user_input", on_change=add_user_message, placeholder="Type your request here...")
 else:
     st.write("Please create or load a conversation to start chatting.")
 

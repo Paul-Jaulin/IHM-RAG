@@ -4,7 +4,7 @@ import os
 import time
 from typing import List, Dict
 import streamlit as st
-from pathlib import Path  # Import Path here
+from pathlib import Path
 from advanced_chatbot.services.rag_service import RagService
 from advanced_chatbot.config import DATA_PATH
 from llama_index_client import ChatMessage
@@ -72,7 +72,7 @@ def list_data_files() -> List[str]:
     """
     List all files in the data directory.
     """
-    return [f for f in DATA_PATH.glob('*') if f.is_file()]
+    return [str(f) for f in DATA_PATH.glob('*') if f.is_file()]
 
 def get_file_paths(selected_files: List[str]) -> List[str]:
     """
