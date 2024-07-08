@@ -163,7 +163,7 @@ if st.session_state.current_conversation is not None:
             add_message("bot", bot_response)
             st.session_state.user_input = ""
 
-    st.text_input("Type your request...", key="user_input", on_change=add_user_message, placeholder="Type your request here...", class_="chat-input")
+    st.text_input("Type your request...", key="user_input", on_change=add_user_message, placeholder="Type your request here...")
 else:
     st.write("Please create or load a conversation to start chatting.")
 
